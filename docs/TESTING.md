@@ -21,6 +21,22 @@ Builds `test/host` for ESP-IDF's `linux` target in WSL and runs the Unity tests 
 | `test_tls_check.c` | EC/RSA/PKCS#8 keys, certificate chains, CRLF + whitespace, and every rejection code |
 | `test_tls_csr.c` | device key is P-256 and random, CSR subject/SAN/public key, bad key |
 
+### Without WSL: native Windows build
+
+```powershell
+./tools/host_test_win.ps1 -Gcc E:\path\to\mingw\bin\gcc.exe   # or with gcc on PATH: ./tools/host_test_win.ps1
+```
+
+Compiles `gw_core` and the same test files with a MinGW gcc (tested with GCC 13.2 32-bit;
+any recent MinGW-w64 should work) against the upstream mbedTLS, Unity and cJSON sources from your
+ESP-IDF install, using CMake + Ninja from the ESP-IDF tools. Expected: `45 Tests 0 Failures`.
+The 10 `test_store.c` tests are left out: they need ESP-IDF's NVS flash emulation, which only
+exists for POSIX hosts — run them with `./tools/host_test.ps1` (WSL).
+Needs: Git for Windows (fixtures), and one earlier firmware build (`./tools/build.ps1 esp32`) so
+that cJSON has been downloaded into `managed_components/`. Build log: `test/host_win/build.log`.
+How it fits around ESP-IDF: `test/host_win/mbedtls_shim/` stands in for the two headers ESP-IDF's
+mbedTLS copy expects from ESP-IDF itself, and `test/host_win/idf_shim/sdkconfig.h` is empty.
+
 ## 2. Firmware build
 
 ```powershell

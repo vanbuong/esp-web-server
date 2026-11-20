@@ -26,3 +26,7 @@ test/host/fixtures/
 
 # Python bytecode
 __pycache__/
+
+# Native Windows host-test build
+test/host_win/build/
+test/host_win/build.log

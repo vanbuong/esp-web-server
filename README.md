@@ -42,7 +42,8 @@ If PowerShell refuses to run the scripts ("running scripts is disabled"), prefix
 
 | Task | Command |
 |---|---|
-| Unit tests on the PC | `./tools/host_test.ps1` (exit code = number of failures) |
+| Unit tests on the PC | `./tools/host_test.ps1` (WSL, all 55 tests; exit code = number of failures) |
+| Unit tests without WSL | `./tools/host_test_win.ps1 -Gcc <path\to\gcc.exe>` (native MinGW gcc; 45 tests — everything except NVS storage) |
 | Build firmware | `./tools/build.ps1 esp32` (`./tools/build.ps1 esp32 size` adds a size report) |
 | Flash + serial log | `./tools/flash.ps1 -Port COM17 -Monitor` (Ctrl+] quits the monitor) |
 | Wipe the device first | `./tools/flash.ps1 -Port COM17 -Erase -Monitor` (erases settings, keys and the per-device password) |
