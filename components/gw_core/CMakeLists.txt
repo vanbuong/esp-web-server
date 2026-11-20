@@ -5,6 +5,7 @@ idf_component_register(SRCS "gw_dev_id.c"
                             "gw_auth.c"
                             "gw_setup.c"
                             "gw_wifi_util.c"
+                            "gw_tls_check.c"
                        INCLUDE_DIRS "include"
                        REQUIRES esp_common
                        PRIV_REQUIRES mbedtls espressif__cjson)
