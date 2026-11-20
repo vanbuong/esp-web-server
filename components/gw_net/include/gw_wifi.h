@@ -4,6 +4,7 @@
 // Why APSTA: the setup page must stay reachable while the device tries the new network.
 // Note: the ESP32 has one radio, so when the STA joins a network on another channel the AP
 // moves to that channel too and clients may drop off briefly — hence the async test below.
+#include <stdbool.h>
 #include <stddef.h>
 #include "esp_err.h"
 #include "gw_wifi_util.h"
@@ -22,6 +23,18 @@ typedef enum { GW_WIFI_TEST_IDLE, GW_WIFI_TEST_RUNNING, GW_WIFI_TEST_OK, GW_WIFI
  * ESP_ERR_INVALID_STATE if a test is already running.
  */
 esp_err_t gw_wifi_test_start(const char *ssid, const char *pass);
+
+/**
+ * Normal mode: station only. Connects, and reconnects forever with backoff 1, 2, 4 ... 60 s.
+ * Never opens the setup AP. Call once.
+ */
+esp_err_t gw_wifi_start_station(const char *ssid, const char *pass);
+
+/** Current IPv4 address as text; false (and "") while not connected. */
+bool gw_wifi_station_ip(char *ip, size_t len);
+
+/** Signal strength of the connected network in dBm; 0 if not connected. */
+int8_t gw_wifi_station_rssi(void);
 
 /** reason (on FAILED): "auth_failed" | "no_ap_found" | "timeout" | "other"; "" otherwise. */
 gw_wifi_test_state_t gw_wifi_test_get(char *reason, size_t reason_len);

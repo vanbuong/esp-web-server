@@ -99,4 +99,13 @@ menu "Gateway"
                 slower too. 10000 takes well under a second on an ESP32.
     endmenu
 
+    menu "Normal mode"
+        config GW_SNTP_SERVER
+            string "SNTP time server"
+            default "pool.ntp.org"
+            help
+                Only used to show dates (e.g. certificate expiry). The gateway works without it,
+                e.g. on a network with no internet access.
+    endmenu
+
 endmenu

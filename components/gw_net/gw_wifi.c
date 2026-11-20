@@ -1,3 +1,5 @@
+#include <inttypes.h>
+#include <stdio.h>
 #include <string.h>
 #include "esp_check.h"
 #include "esp_event.h"
@@ -78,18 +80,29 @@ static void on_timeout(void *arg)
     finish(GW_WIFI_TEST_FAILED, "timeout");
 }
 
-esp_err_t gw_wifi_start_setup(const char *ap_ssid, const char *ap_password, uint8_t channel)
+// Shared by both modes: network stack, event loop, Wi-Fi driver (netifs created by the caller).
+static esp_err_t wifi_base_init(void)
 {
     ESP_RETURN_ON_ERROR(esp_netif_init(), TAG, "netif");
     esp_err_t err = esp_event_loop_create_default();
     ESP_RETURN_ON_FALSE(err == ESP_OK || err == ESP_ERR_INVALID_STATE, err, TAG, "event loop");
-    ESP_RETURN_ON_FALSE(esp_netif_create_default_wifi_ap(), ESP_FAIL, TAG, "ap netif");
-    ESP_RETURN_ON_FALSE(esp_netif_create_default_wifi_sta(), ESP_FAIL, TAG, "sta netif");
+    return ESP_OK;
+}
 
+static esp_err_t wifi_driver_init(void)
+{
     wifi_init_config_t init = WIFI_INIT_CONFIG_DEFAULT();
     ESP_RETURN_ON_ERROR(esp_wifi_init(&init), TAG, "wifi init");
     // Credentials live in our own NVS keys (gw_store), not in the Wi-Fi driver's copy.
-    ESP_RETURN_ON_ERROR(esp_wifi_set_storage(WIFI_STORAGE_RAM), TAG, "storage");
+    return esp_wifi_set_storage(WIFI_STORAGE_RAM);
+}
+
+esp_err_t gw_wifi_start_setup(const char *ap_ssid, const char *ap_password, uint8_t channel)
+{
+    ESP_RETURN_ON_ERROR(wifi_base_init(), TAG, "base");
+    ESP_RETURN_ON_FALSE(esp_netif_create_default_wifi_ap(), ESP_FAIL, TAG, "ap netif");
+    ESP_RETURN_ON_FALSE(esp_netif_create_default_wifi_sta(), ESP_FAIL, TAG, "sta netif");
+    ESP_RETURN_ON_ERROR(wifi_driver_init(), TAG, "driver");
     ESP_RETURN_ON_ERROR(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, on_event, NULL), TAG, "evt");
     ESP_RETURN_ON_ERROR(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, on_event, NULL), TAG, "evt");
 
@@ -214,4 +227,82 @@ gw_wifi_test_state_t gw_wifi_test_get(char *reason, size_t reason_len)
         strlcpy(reason, r, reason_len);
     }
     return st;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Normal mode: station only. Reconnects forever with exponential backoff (1, 2, 4 ... 60 s) so a
+// router reboot or an out-of-range moment heals itself without flooding the network.
+// The setup AP is never reopened: recovery is the BOOT-button factory reset (spec 7.2).
+
+#define BACKOFF_MAX_S 60
+static esp_timer_handle_t s_retry;
+static uint32_t s_backoff_s = 1;
+static char s_ip[16];          // "" until an address is held
+static portMUX_TYPE s_ip_lock = portMUX_INITIALIZER_UNLOCKED;
+
+static void set_ip(const char *ip)
+{
+    portENTER_CRITICAL(&s_ip_lock);
+    strlcpy(s_ip, ip, sizeof(s_ip));
+    portEXIT_CRITICAL(&s_ip_lock);
+}
+
+static void on_retry(void *arg)
+{
+    esp_wifi_connect();
+}
+
+static void on_sta_event(void *arg, esp_event_base_t base, int32_t id, void *data)
+{
+    if (base == WIFI_EVENT && id == WIFI_EVENT_STA_START) {
+        esp_wifi_connect();
+    } else if (base == WIFI_EVENT && id == WIFI_EVENT_STA_DISCONNECTED) {
+        const wifi_event_sta_disconnected_t *d = data;
+        set_ip("");
+        ESP_LOGW(TAG, "disconnected (%s, reason %u), retry in %" PRIu32 " s",
+                 reason_name(d->reason), d->reason, s_backoff_s);
+        esp_timer_start_once(s_retry, (uint64_t)s_backoff_s * 1000000);
+        s_backoff_s = s_backoff_s * 2 > BACKOFF_MAX_S ? BACKOFF_MAX_S : s_backoff_s * 2;
+    } else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
+        const ip_event_got_ip_t *e = data;
+        char ip[16];
+        snprintf(ip, sizeof(ip), IPSTR, IP2STR(&e->ip_info.ip));
+        set_ip(ip);
+        s_backoff_s = 1;
+        ESP_LOGI(TAG, "connected, IP %s", ip);
+    }
+}
+
+esp_err_t gw_wifi_start_station(const char *ssid, const char *pass)
+{
+    ESP_RETURN_ON_ERROR(wifi_base_init(), TAG, "base");
+    ESP_RETURN_ON_FALSE(esp_netif_create_default_wifi_sta(), ESP_FAIL, TAG, "sta netif");
+    ESP_RETURN_ON_ERROR(wifi_driver_init(), TAG, "driver");
+    const esp_timer_create_args_t targs = {.callback = on_retry, .name = "wifi_retry"};
+    ESP_RETURN_ON_ERROR(esp_timer_create(&targs, &s_retry), TAG, "timer");
+    ESP_RETURN_ON_ERROR(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, on_sta_event, NULL), TAG, "evt");
+    ESP_RETURN_ON_ERROR(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, on_sta_event, NULL), TAG, "evt");
+
+    wifi_config_t sta = {0};
+    memcpy(sta.sta.ssid, ssid, strnlen(ssid, sizeof(sta.sta.ssid)));
+    memcpy(sta.sta.password, pass, strnlen(pass, sizeof(sta.sta.password)));
+    ESP_RETURN_ON_ERROR(esp_wifi_set_mode(WIFI_MODE_STA), TAG, "mode");
+    ESP_RETURN_ON_ERROR(esp_wifi_set_config(WIFI_IF_STA, &sta), TAG, "sta config");
+    ESP_RETURN_ON_ERROR(esp_wifi_start(), TAG, "start");   // STA_START event → connect
+    ESP_LOGI(TAG, "station mode, joining \"%s\"", ssid);
+    return ESP_OK;
+}
+
+bool gw_wifi_station_ip(char *ip, size_t len)
+{
+    portENTER_CRITICAL(&s_ip_lock);
+    strlcpy(ip, s_ip, len);
+    portEXIT_CRITICAL(&s_ip_lock);
+    return ip[0] != 0;
+}
+
+int8_t gw_wifi_station_rssi(void)
+{
+    wifi_ap_record_t ap;
+    return esp_wifi_sta_get_ap_info(&ap) == ESP_OK ? ap.rssi : 0;
 }
