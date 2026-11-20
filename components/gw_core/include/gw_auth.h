@@ -21,7 +21,7 @@ typedef struct {
 
 typedef struct gw_auth gw_auth_t;  // opaque; owns the session table and the login limiter
 typedef enum { GW_LOGIN_OK, GW_LOGIN_BAD, GW_LOGIN_LOCKED } gw_login_result_t;
-typedef void (*gw_rand_fn)(uint8_t *buf, size_t len);   // esp_fill_random on target, fake in tests
+typedef void (*gw_rand_fn)(void *buf, size_t len);   // same signature as esp_fill_random; fake in tests
 
 /** NULL on allocation failure. timeout_s = session idle timeout. */
 gw_auth_t *gw_auth_create(size_t max_sessions, uint32_t timeout_s, gw_rand_fn rnd);

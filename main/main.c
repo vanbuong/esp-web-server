@@ -8,6 +8,7 @@
 #include "gw_wifi.h"
 #include "gw_dns.h"
 #include "gw_mdns.h"
+#include "gw_http_setup.h"
 #include "gw_wifi_util.h"
 
 static const char *TAG = "main";
@@ -42,8 +43,9 @@ void app_main(void)
     ESP_LOGI(TAG, "gateway %s booting", esp_app_get_description()->version);
 
     // Identity from the factory-programmed Wi-Fi station MAC (unique per chip).
+    // static: the web server keeps pointers to these after app_main returns.
+    static char id[8], host[48], ssid[33];
     uint8_t mac[6];
-    char id[8], host[48], ssid[33];
     ESP_ERROR_CHECK(esp_read_mac(mac, ESP_MAC_WIFI_STA));
     ESP_ERROR_CHECK(gw_dev_id_format(mac, CONFIG_GW_DEVICE_ID_LEN, id, sizeof(id)));
     ESP_ERROR_CHECK(gw_name_join(CONFIG_GW_HOSTNAME_PREFIX, id, host, sizeof(host)));
@@ -69,4 +71,17 @@ void app_main(void)
     char instance[48];
     ESP_ERROR_CHECK(gw_name_join("Gateway ", id, instance, sizeof(instance)));
     ESP_ERROR_CHECK(gw_mdns_start(host, instance, false));
+
+    static const gw_creds_t defaults = {
+        .user = CONFIG_GW_DEFAULT_USER,
+        .default_password = CONFIG_GW_DEFAULT_PASSWORD,
+        .iterations = CONFIG_GW_PBKDF2_ITERATIONS,
+    };
+    const gw_http_setup_cfg_t http = {
+        .device_id = id,
+        .hostname = host,
+        .fw_version = esp_app_get_description()->version,
+        .defaults = &defaults,
+    };
+    ESP_ERROR_CHECK(gw_http_setup_start(&http));
 }

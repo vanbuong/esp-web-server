@@ -143,22 +143,28 @@ esp_err_t gw_wifi_scan(gw_ap_info_t *out, size_t max, size_t *count)
 
     uint16_t n = SCAN_RECORDS_MAX;
     wifi_ap_record_t *rec = calloc(n, sizeof(*rec));
-    if (!rec) {
+    gw_ap_info_t *all = calloc(n, sizeof(*all));
+    if (!rec || !all) {
+        free(rec);
+        free(all);
         esp_wifi_clear_ap_list();
         return ESP_ERR_NO_MEM;
     }
     esp_err_t err = esp_wifi_scan_get_ap_records(&n, rec);   // also frees the driver's list
     if (err == ESP_OK) {
-        size_t m = n < max ? n : max;
-        for (size_t i = 0; i < m; i++) {
-            strlcpy(out[i].ssid, (const char *)rec[i].ssid, sizeof(out[i].ssid));
-            out[i].rssi = rec[i].rssi;
-            out[i].auth = map_auth(rec[i].authmode);
-            out[i].channel = rec[i].primary;
+        for (size_t i = 0; i < n; i++) {
+            strlcpy(all[i].ssid, (const char *)rec[i].ssid, sizeof(all[i].ssid));
+            all[i].rssi = rec[i].rssi;
+            all[i].auth = map_auth(rec[i].authmode);
+            all[i].channel = rec[i].primary;
         }
-        *count = gw_ap_list_normalize(out, m);
+        // Normalize everything first, then cap: capping first could drop the strongest networks.
+        size_t m = gw_ap_list_normalize(all, n);
+        *count = m < max ? m : max;
+        memcpy(out, all, *count * sizeof(*out));
     }
     free(rec);
+    free(all);
     return err;
 }
 

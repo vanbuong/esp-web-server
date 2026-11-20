@@ -4,10 +4,10 @@
 #include "gw_auth.h"
 
 static uint8_t s_counter;
-static void fake_rand(uint8_t *buf, size_t len)
+static void fake_rand(void *buf, size_t len)
 {
     for (size_t i = 0; i < len; i++) {
-        buf[i] = s_counter++;
+        ((uint8_t *)buf)[i] = s_counter++;
     }
 }
 
