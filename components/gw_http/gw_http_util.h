@@ -7,6 +7,8 @@
 #include "gw_auth.h"
 
 #define GW_HTTP_BODY_MAX 512
+#define GW_HTTP_RECV_TIMEOUTS 3     // x 5 s socket timeout before a stalled body is abandoned
+#define GW_HTTP_COOKIE_MAX 4096     // browsers cap a Cookie header around 4 KB
 #define GW_COOKIE_NAME "gw_session"
 
 // esp_http_server only defines a few status strings; the rest are spelled out here.

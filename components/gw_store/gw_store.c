@@ -77,42 +77,39 @@ esp_err_t gw_store_set_step(gw_step_t s)
     return set_u8("setup_step", (uint8_t)s);
 }
 
-static esp_err_t get_blob(nvs_handle_t h, const char *key, void *out, size_t len)
-{
-    size_t n = len;
-    esp_err_t err = nvs_get_blob(h, key, out, &n);
-    return (err == ESP_OK && n != len) ? ESP_ERR_INVALID_SIZE : err;
-}
+// Each credential set is ONE NVS key: NVS writes a single key atomically, but not several keys
+// together. With separate keys, a power cut while changing them could pair a new salt with the
+// old hash (admin locked out) or a new SSID with the old Wi-Fi password.
+typedef struct {
+    uint8_t salt[GW_PW_SALT_LEN];
+    uint8_t hash[GW_PW_HASH_LEN];
+} pw_rec_t;
 
-esp_err_t gw_store_get_password(bool *is_set, uint8_t salt[GW_PW_SALT_LEN], uint8_t hash[GW_PW_HASH_LEN])
+typedef struct {
+    char ssid[33];
+    char pass[65];
+} wifi_rec_t;
+
+static esp_err_t get_rec(const char *key, void *out, size_t len)
 {
-    *is_set = false;
     nvs_handle_t h;
     esp_err_t err = nvs_open(NS_MAIN, NVS_READONLY, &h);
-    if (err == ESP_ERR_NVS_NOT_FOUND) {
-        return ESP_OK;   // nothing saved yet
-    }
-    ESP_RETURN_ON_ERROR(err, TAG, "open");
-    err = get_blob(h, "pw_salt", salt, GW_PW_SALT_LEN);
     if (err == ESP_OK) {
-        err = get_blob(h, "pw_hash", hash, GW_PW_HASH_LEN);
+        size_t n = len;
+        err = nvs_get_blob(h, key, out, &n);
+        if (err == ESP_OK && n != len) {
+            err = ESP_ERR_INVALID_SIZE;
+        }
+        nvs_close(h);
     }
-    nvs_close(h);
-    if (err == ESP_ERR_NVS_NOT_FOUND) {
-        return ESP_OK;
-    }
-    *is_set = (err == ESP_OK);
-    return err;
+    return err;   // ESP_ERR_NVS_NOT_FOUND when namespace or key is missing
 }
 
-esp_err_t gw_store_set_password(const uint8_t salt[GW_PW_SALT_LEN], const uint8_t hash[GW_PW_HASH_LEN])
+static esp_err_t set_rec(const char *key, const void *rec, size_t len)
 {
     nvs_handle_t h;
     ESP_RETURN_ON_ERROR(nvs_open(NS_MAIN, NVS_READWRITE, &h), TAG, "open");
-    esp_err_t err = nvs_set_blob(h, "pw_salt", salt, GW_PW_SALT_LEN);
-    if (err == ESP_OK) {
-        err = nvs_set_blob(h, "pw_hash", hash, GW_PW_HASH_LEN);
-    }
+    esp_err_t err = nvs_set_blob(h, key, rec, len);
     if (err == ESP_OK) {
         err = nvs_commit(h);
     }
@@ -120,39 +117,52 @@ esp_err_t gw_store_set_password(const uint8_t salt[GW_PW_SALT_LEN], const uint8_
     return err;
 }
 
-static esp_err_t get_str(nvs_handle_t h, const char *key, char *out, size_t len)
+esp_err_t gw_store_get_password(bool *is_set, uint8_t salt[GW_PW_SALT_LEN], uint8_t hash[GW_PW_HASH_LEN])
 {
-    size_t n = len;
-    return nvs_get_str(h, key, out, &n);
+    pw_rec_t r;
+    esp_err_t err = get_rec("pw", &r, sizeof(r));
+    *is_set = (err == ESP_OK);
+    if (err == ESP_ERR_NVS_NOT_FOUND) {
+        return ESP_OK;   // nothing saved yet: default password applies
+    }
+    if (err == ESP_OK) {
+        memcpy(salt, r.salt, GW_PW_SALT_LEN);
+        memcpy(hash, r.hash, GW_PW_HASH_LEN);
+    }
+    return err;
+}
+
+esp_err_t gw_store_set_password(const uint8_t salt[GW_PW_SALT_LEN], const uint8_t hash[GW_PW_HASH_LEN])
+{
+    pw_rec_t r;
+    memcpy(r.salt, salt, GW_PW_SALT_LEN);
+    memcpy(r.hash, hash, GW_PW_HASH_LEN);
+    return set_rec("pw", &r, sizeof(r));
 }
 
 esp_err_t gw_store_get_wifi(char ssid[33], char pass[65])
 {
-    nvs_handle_t h;
-    esp_err_t err = nvs_open(NS_MAIN, NVS_READONLY, &h);
+    wifi_rec_t r;
+    esp_err_t err = get_rec("wifi", &r, sizeof(r));
     if (err == ESP_OK) {
-        err = get_str(h, "wifi_ssid", ssid, 33);
-        if (err == ESP_OK) {
-            err = get_str(h, "wifi_pass", pass, 65);
-        }
-        nvs_close(h);
+        strlcpy(ssid, r.ssid, 33);
+        strlcpy(pass, r.pass, 65);
     }
     return err == ESP_ERR_NVS_NOT_FOUND ? ESP_ERR_NOT_FOUND : err;
 }
 
 esp_err_t gw_store_set_wifi(const char *ssid, const char *pass)
 {
-    nvs_handle_t h;
-    ESP_RETURN_ON_ERROR(nvs_open(NS_MAIN, NVS_READWRITE, &h), TAG, "open");
-    esp_err_t err = nvs_set_str(h, "wifi_ssid", ssid);
-    if (err == ESP_OK) {
-        err = nvs_set_str(h, "wifi_pass", pass);
-    }
-    if (err == ESP_OK) {
-        err = nvs_commit(h);
-    }
-    nvs_close(h);
-    return err;
+    wifi_rec_t r = {0};   // zeroed: no stack garbage written to flash
+    strlcpy(r.ssid, ssid, sizeof(r.ssid));
+    strlcpy(r.pass, pass, sizeof(r.pass));
+    return set_rec("wifi", &r, sizeof(r));
+}
+
+static esp_err_t get_str(nvs_handle_t h, const char *key, char *out, size_t len)
+{
+    size_t n = len;
+    return nvs_get_str(h, key, out, &n);
 }
 
 esp_err_t gw_store_get_ap_password(char out[GW_AP_PW_LEN + 1])

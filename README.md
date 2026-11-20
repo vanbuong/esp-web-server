@@ -48,6 +48,9 @@ If PowerShell refuses to run the scripts ("running scripts is disabled"), prefix
 
 Build logs: `build/<profile>.log`, `test/host/build-linux.log`.
 
+After changing `sdkconfig.defaults*`, delete `build/<profile>/sdkconfig`: an existing sdkconfig keeps
+the values it already has, and defaults only fill in options that are missing.
+
 ## Configuration (`idf.py menuconfig` → Gateway)
 
 | Option | Default | Why it exists |

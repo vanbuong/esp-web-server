@@ -14,3 +14,7 @@ CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
 
 # mDNS debug console commands need the console component, which MINIMAL_BUILD leaves out.
 # CONFIG_MDNS_ENABLE_CONSOLE_CLI is not set
+
+# Socket budget: the HTTP server needs max_open_sockets (7) + 3 internal sockets, the captive DNS
+# server one more, and phones open several connections at once. The default of 10 is too few.
+CONFIG_LWIP_MAX_SOCKETS=16

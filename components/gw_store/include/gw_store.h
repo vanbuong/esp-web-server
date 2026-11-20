@@ -2,7 +2,8 @@
 // Persistent device state in NVS (ESP-IDF's key-value store in flash).
 // Two partitions: "nvs" holds everything a factory reset erases; "factory" holds per-device
 // data that must survive it (the setup Wi-Fi password printed on the label).
-// Rule for callers: save a step's data BEFORE advancing the step, so a power cut can only
+// Each credential set (password salt+hash, Wi-Fi ssid+password) is one NVS key, so it is
+// replaced atomically. Rule for callers: save a step's data BEFORE advancing the step, so a power cut can only
 // make the user repeat a step, never skip one.
 #include <stdbool.h>
 #include <stdint.h>

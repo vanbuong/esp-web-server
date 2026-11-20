@@ -32,7 +32,8 @@ static void finish(gw_wifi_test_state_t st, const char *reason)
     if (!was_running) {
         return;
     }
-    esp_timer_stop(s_timer);   // ESP_ERR_INVALID_STATE if it already fired: fine
+    // The timeout timer is NOT stopped here: a newer test may already have restarted it.
+    // A late firing is harmless (state is no longer RUNNING); gw_wifi_test_start re-arms it.
     if (st == GW_WIFI_TEST_FAILED) {
         esp_wifi_disconnect();  // stop trying; the user picks again
     }
@@ -103,9 +104,10 @@ esp_err_t gw_wifi_start_setup(const char *ap_ssid, const char *ap_password, uint
             .pmf_cfg = {.required = false},
         },
     };
-    strlcpy((char *)ap.ap.ssid, ap_ssid, sizeof(ap.ap.ssid));
-    ap.ap.ssid_len = strlen((char *)ap.ap.ssid);
-    strlcpy((char *)ap.ap.password, ap_password, sizeof(ap.ap.password));
+    // ssid[32] / password[64] have no room for a NUL: copy the bytes, not a C string.
+    ap.ap.ssid_len = strnlen(ap_ssid, sizeof(ap.ap.ssid));
+    memcpy(ap.ap.ssid, ap_ssid, ap.ap.ssid_len);
+    memcpy(ap.ap.password, ap_password, strnlen(ap_password, sizeof(ap.ap.password)));
 
     ESP_RETURN_ON_ERROR(esp_wifi_set_mode(WIFI_MODE_APSTA), TAG, "mode");
     ESP_RETURN_ON_ERROR(esp_wifi_set_config(WIFI_IF_AP, &ap), TAG, "ap config");
@@ -181,10 +183,13 @@ esp_err_t gw_wifi_test_start(const char *ssid, const char *pass)
         return ESP_ERR_INVALID_STATE;
     }
 
+    // ssid[32] / password[64] are not NUL-terminated when full: a 32-byte SSID or a 64-hex raw
+    // PSK must be copied whole (strlcpy would drop the last byte).
     wifi_config_t sta = {0};
-    strlcpy((char *)sta.sta.ssid, ssid, sizeof(sta.sta.ssid));
-    strlcpy((char *)sta.sta.password, pass, sizeof(sta.sta.password));
-    esp_wifi_disconnect();   // leave any previous test network (reason ASSOC_LEAVE, ignored)
+    memcpy(sta.sta.ssid, ssid, strnlen(ssid, sizeof(sta.sta.ssid)));
+    memcpy(sta.sta.password, pass, strnlen(pass, sizeof(sta.sta.password)));
+    esp_timer_stop(s_timer);   // a finished earlier test may have left it armed; ignore "not running"
+    esp_wifi_disconnect();     // leave any previous test network (reason ASSOC_LEAVE, ignored)
     esp_err_t err = esp_wifi_set_config(WIFI_IF_STA, &sta);
     if (err == ESP_OK) {
         err = esp_timer_start_once(s_timer, TEST_TIMEOUT_US);
