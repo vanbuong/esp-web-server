@@ -6,7 +6,9 @@ param(
     [string] $Base = 'http://192.168.4.1',
     [Parameter(Mandatory)] [string] $Ssid,
     [string] $WifiPass = '',
-    [string] $NewPassword = 'Learning-123'
+    [string] $NewPassword = 'Learning-123',
+    # Folder with your CA (ca.crt + ca.key, from tools/pki/make_ca). Enables the TLS + finish checks.
+    [string] $Pki = ''
 )
 
 $tmp = Join-Path ([IO.Path]::GetTempPath()) "gw_smoke_$PID"
@@ -104,6 +106,45 @@ Test-Check 'wifi test result ok' ($state -eq 'ok') "state=$state $($r.Body)"
 if ($state -eq 'ok') {
     $r = Invoke-Api GET '/api/status' -Cookie $c3
     Test-Check 'status: step tls' ($r.Body -match '"step":"tls"') "$($r.Body)"
+}
+
+if ($Pki -and $state -eq 'ok') {
+    $hostname = (Invoke-Api GET '/api/status').Body | ConvertFrom-Json | Select-Object -ExpandProperty hostname
+    $caPem = [IO.File]::ReadAllText((Join-Path $Pki 'ca.crt'))
+    $bash = Join-Path $env:ProgramFiles 'Git\bin\bash.exe'
+    $signer = (Join-Path $PSScriptRoot '..\pki\sign_csr.sh') -replace '\\', '/'
+
+    $r = Invoke-Api POST '/api/setup/tls/cert' (@{ cert = 'x'; ca = $caPem } | ConvertTo-Json -Compress) -Cookie $c3
+    Test-Check 'cert before any CSR -> 400 no_pending_key' ($r.Code -eq 400 -and $r.Body -match 'no_pending_key') "$($r.Code) $($r.Body)"
+
+    $r = Invoke-Api POST '/api/setup/finish' '{}' -Cookie $c3
+    Test-Check 'finish before TLS step -> 409' ($r.Code -eq 409) "$($r.Code) $($r.Body)"
+
+    $r1 = Invoke-Api GET '/api/setup/tls/csr' -Cookie $c3
+    $r2 = Invoke-Api GET '/api/setup/tls/csr' -Cookie $c3
+    $csr = ($r1.Body | ConvertFrom-Json).csr
+    Test-Check 'CSR returned, same on second call' ($r1.Code -eq 200 -and $csr -match 'BEGIN CERTIFICATE REQUEST' -and $r1.Body -eq $r2.Body) "$($r1.Code)"
+
+    $csrFile = Join-Path $tmp 'device.csr'
+    [IO.File]::WriteAllText($csrFile, $csr)
+    $signDir = Join-Path $tmp 'signed'; New-Item -ItemType Directory -Force $signDir | Out-Null
+    Copy-Item (Join-Path $Pki 'ca.crt'), (Join-Path $Pki 'ca.key') $signDir
+    & $bash $signer $csrFile 'gatewayWRONG' --out $signDir | Out-Null
+    $wrong = [IO.File]::ReadAllText((Join-Path $signDir 'gatewayWRONG.crt'))
+    $r = Invoke-Api POST '/api/setup/tls/cert' (@{ cert = $wrong; ca = $caPem } | ConvertTo-Json -Compress) -Cookie $c3
+    Test-Check 'cert for another name -> 400 wrong_name' ($r.Code -eq 400 -and $r.Body -match 'wrong_name') "$($r.Code) $($r.Body)"
+
+    & $bash $signer $csrFile $hostname --out $signDir | Out-Null
+    $good = [IO.File]::ReadAllText((Join-Path $signDir "$hostname.crt"))
+    $r = Invoke-Api POST '/api/setup/tls/cert' (@{ cert = $good; ca = $caPem } | ConvertTo-Json -Compress) -Cookie $c3
+    Test-Check 'signed CSR cert accepted -> 200' ($r.Code -eq 200 -and $r.Body -match "`"subject`":`"$hostname`"") "$($r.Code) $($r.Body)"
+    Remove-Item -Recurse -Force $signDir   # contains a copy of the CA key
+
+    $r = Invoke-Api GET '/api/status' -Cookie $c3
+    Test-Check 'status: step finish' ($r.Body -match '"step":"finish"') "$($r.Body)"
+
+    $r = Invoke-Api POST '/api/setup/finish' '{}' -Cookie $c3
+    Test-Check 'finish -> 200 rebooting' ($r.Code -eq 200 -and $r.Body -match '"rebooting":true') "$($r.Code) $($r.Body)"
 }
 
 Remove-Item -Recurse -Force $tmp

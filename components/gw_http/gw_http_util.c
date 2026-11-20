@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "esp_system.h"
 #include "esp_timer.h"
 #include "gw_http_util.h"
 
@@ -27,9 +28,9 @@ esp_err_t gw_http_send_error(httpd_req_t *req, const char *status, const char *c
     return gw_http_send_json(req, status, o);
 }
 
-cJSON *gw_http_read_json(httpd_req_t *req)
+cJSON *gw_http_read_json(httpd_req_t *req, size_t max_len)
 {
-    if (req->content_len > GW_HTTP_BODY_MAX) {
+    if (req->content_len > max_len) {
         gw_http_send_error(req, GW_HTTP_413, "too_large");
         return NULL;
     }
@@ -39,7 +40,12 @@ cJSON *gw_http_read_json(httpd_req_t *req)
         gw_http_send_error(req, GW_HTTP_415, "bad_content_type");
         return NULL;
     }
-    char buf[GW_HTTP_BODY_MAX + 1];
+    // Heap, not stack: TLS uploads are up to 8 KB and the httpd task stack is 8 KB.
+    char *buf = malloc(req->content_len + 1);
+    if (!buf) {
+        httpd_resp_send_500(req);
+        return NULL;
+    }
     size_t got = 0;
     int timeouts = 0;
     while (got < req->content_len) {
@@ -49,17 +55,20 @@ cJSON *gw_http_read_json(httpd_req_t *req)
             // has a single task, so waiting forever would freeze every other client: give up.
             if (++timeouts >= GW_HTTP_RECV_TIMEOUTS) {
                 httpd_resp_send_408(req);
+                free(buf);
                 return NULL;
             }
             continue;
         }
         if (r <= 0) {
+            free(buf);
             return NULL;   // connection closed; nothing to answer
         }
         got += r;
     }
     buf[got] = 0;
     cJSON *o = cJSON_Parse(buf);
+    free(buf);
     if (!cJSON_IsObject(o)) {
         cJSON_Delete(o);
         gw_http_send_error(req, HTTPD_400, "bad_json");
@@ -102,6 +111,21 @@ void gw_http_set_session_cookie(httpd_req_t *req, const char *token, char buf[12
         snprintf(buf, 128, GW_COOKIE_NAME "=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0");
     }
     httpd_resp_set_hdr(req, "Set-Cookie", buf);
+}
+
+static void do_restart(void *arg)
+{
+    esp_restart();
+}
+
+void gw_http_reboot_later(uint32_t delay_ms)
+{
+    static esp_timer_handle_t t;
+    const esp_timer_create_args_t args = {.callback = do_restart, .name = "reboot"};
+    if (!t && esp_timer_create(&args, &t) != ESP_OK) {
+        esp_restart();   // can't delay: reboot now
+    }
+    esp_timer_start_once(t, (uint64_t)delay_ms * 1000);
 }
 
 uint32_t gw_http_now_s(void)

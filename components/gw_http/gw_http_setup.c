@@ -4,6 +4,7 @@
 #include "esp_random.h"
 #include "gw_http_setup.h"
 #include "gw_http_util.h"
+#include "gw_http_tls.h"
 #include "gw_setup.h"
 #include "gw_store.h"
 #include "gw_wifi.h"
@@ -66,7 +67,7 @@ static esp_err_t h_status(httpd_req_t *req)
 
 static esp_err_t h_login(httpd_req_t *req)
 {
-    cJSON *body = gw_http_read_json(req);
+    cJSON *body = gw_http_read_json(req, GW_HTTP_BODY_MAX);
     if (!body) {
         return ESP_OK;
     }
@@ -115,7 +116,7 @@ static esp_err_t h_password(httpd_req_t *req)
     if (!gate(req, GW_STEP_PASSWORD)) {
         return ESP_OK;
     }
-    cJSON *body = gw_http_read_json(req);
+    cJSON *body = gw_http_read_json(req, GW_HTTP_BODY_MAX);
     if (!body) {
         return ESP_OK;
     }
@@ -183,7 +184,7 @@ static esp_err_t h_wifi_test(httpd_req_t *req)
     if (!gate(req, GW_STEP_WIFI)) {
         return ESP_OK;
     }
-    cJSON *body = gw_http_read_json(req);
+    cJSON *body = gw_http_read_json(req, GW_HTTP_BODY_MAX);
     if (!body) {
         return ESP_OK;
     }
@@ -242,6 +243,80 @@ static esp_err_t h_wifi_result(httpd_req_t *req)
     return gw_http_send_json(req, HTTPD_200, o);
 }
 
+static esp_err_t h_tls_csr(httpd_req_t *req)
+{
+    if (!gate(req, GW_STEP_TLS)) {
+        return ESP_OK;
+    }
+    char *csr = NULL;
+    if (gw_http_tls_csr(s_cfg.hostname, false, &csr) != ESP_OK) {
+        return httpd_resp_send_500(req);
+    }
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddStringToObject(o, "csr", csr);
+    free(csr);
+    return gw_http_send_json(req, HTTPD_200, o);
+}
+
+// CSR path: {"cert","ca"} (uses the pending key). Upload path: {"key","cert","ca"}.
+static esp_err_t h_tls_cert(httpd_req_t *req)
+{
+    if (!gate(req, GW_STEP_TLS)) {
+        return ESP_OK;
+    }
+    cJSON *body = gw_http_read_json(req, GW_HTTP_TLS_BODY_MAX);
+    if (!body) {
+        return ESP_OK;
+    }
+    char *key = (char *)gw_json_str(body, "key");    // cJSON strings are heap copies: may be edited
+    char *cert = (char *)gw_json_str(body, "cert");
+    char *ca = (char *)gw_json_str(body, "ca");
+    gw_tls_info_t info;
+    const char *err = gw_http_tls_accept(key, cert ? cert : (char[]){""}, ca ? ca : (char[]){""},
+                                         s_cfg.hostname, &info);
+    cJSON_Delete(body);
+    if (err) {
+        return gw_http_send_error(req, HTTPD_400, err);
+    }
+    if (complete_step(GW_STEP_TLS) != ESP_OK) {
+        return httpd_resp_send_500(req);
+    }
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddBoolToObject(o, "ok", true);
+    cJSON_AddStringToObject(o, "subject", info.subject_cn);
+    cJSON_AddStringToObject(o, "issuer", info.issuer_cn);
+    cJSON_AddStringToObject(o, "not_after", info.not_after);
+    return gw_http_send_json(req, HTTPD_200, o);
+}
+
+static esp_err_t h_finish(httpd_req_t *req)
+{
+    if (!gate(req, GW_STEP_FINISH)) {
+        return ESP_OK;
+    }
+    gw_tls_rec_t tls;
+    char ssid[33], pass[65];
+    if (gw_store_get_tls(&tls) != ESP_OK) {
+        return gw_http_send_error(req, GW_HTTP_409, "tls_missing");
+    }
+    gw_store_tls_free(&tls);
+    if (gw_store_get_wifi(ssid, pass) != ESP_OK) {
+        return gw_http_send_error(req, GW_HTTP_409, "wifi_missing");
+    }
+    memset(pass, 0, sizeof(pass));
+    // State first, then step: a power cut in between still boots into normal mode.
+    if (gw_store_set_state(GW_STATE_PROVISIONED) != ESP_OK || gw_store_set_step(GW_STEP_DONE) != ESP_OK) {
+        return httpd_resp_send_500(req);
+    }
+    ESP_LOGI(TAG, "setup finished — rebooting into normal mode");
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddBoolToObject(o, "ok", true);
+    cJSON_AddBoolToObject(o, "rebooting", true);
+    esp_err_t r = gw_http_send_json(req, HTTPD_200, o);
+    gw_http_reboot_later(2000);
+    return r;
+}
+
 static esp_err_t h_root(httpd_req_t *req)
 {
     httpd_resp_set_type(req, "text/html");
@@ -280,6 +355,9 @@ esp_err_t gw_http_setup_start(const gw_http_setup_cfg_t *cfg)
         {.uri = "/api/setup/wifi/scan", .method = HTTP_GET, .handler = h_scan},
         {.uri = "/api/setup/wifi/test", .method = HTTP_POST, .handler = h_wifi_test},
         {.uri = "/api/setup/wifi/result", .method = HTTP_GET, .handler = h_wifi_result},
+        {.uri = "/api/setup/tls/csr", .method = HTTP_GET, .handler = h_tls_csr},
+        {.uri = "/api/setup/tls/cert", .method = HTTP_POST, .handler = h_tls_cert},
+        {.uri = "/api/setup/finish", .method = HTTP_POST, .handler = h_finish},
     };
     for (size_t i = 0; i < sizeof(uris) / sizeof(uris[0]); i++) {
         ESP_RETURN_ON_ERROR(httpd_register_uri_handler(srv, &uris[i]), TAG, "uri %s", uris[i].uri);

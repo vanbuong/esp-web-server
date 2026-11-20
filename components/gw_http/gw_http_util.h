@@ -27,10 +27,10 @@ esp_err_t gw_http_send_json(httpd_req_t *req, const char *status, cJSON *obj);
 esp_err_t gw_http_send_error(httpd_req_t *req, const char *status, const char *code);
 
 /**
- * Reads and parses a JSON body. On a problem it already sent the error response
+ * Reads and parses a JSON body of at most max_len bytes (GW_HTTP_BODY_MAX for most endpoints). On a problem it already sent the error response
  * (413 too_large, 415 bad_content_type, 400 bad_json) and returns NULL.
  */
-cJSON *gw_http_read_json(httpd_req_t *req);
+cJSON *gw_http_read_json(httpd_req_t *req, size_t max_len);
 
 /** String field or NULL if missing / not a string. */
 const char *gw_json_str(const cJSON *obj, const char *key);
@@ -42,3 +42,6 @@ bool gw_http_session_token(httpd_req_t *req, char tok[GW_TOKEN_HEX_LEN + 1]);
 void gw_http_set_session_cookie(httpd_req_t *req, const char *token, char buf[128]);
 
 uint32_t gw_http_now_s(void);
+
+/** Restarts the chip after delay_ms, so the HTTP response is delivered first. */
+void gw_http_reboot_later(uint32_t delay_ms);
