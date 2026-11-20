@@ -19,9 +19,10 @@ $build = Join-Path $PSScriptRoot "..\build\$Profile"
 $elf = Get-ChildItem (Join-Path $build '*.elf') | Select-Object -First 1
 Push-Location $build
 try {
-    $erase = @(); if ($Erase) { $erase = @('--erase-all') }
+    # (not $erase: PowerShell names are case-insensitive, that would overwrite the -Erase switch)
+    $eraseArgs = @(); if ($Erase) { $eraseArgs = @('--erase-all') }
     python -m esptool --chip auto -p $Port -b 460800 --before default-reset --after hard-reset `
-        write-flash @erase '@flash_args'
+        write-flash @eraseArgs '@flash_args'
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 } finally { Pop-Location }
 if ($Monitor) { python -m esp_idf_monitor -p $Port $elf.FullName }
