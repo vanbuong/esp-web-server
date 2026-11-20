@@ -1,0 +1,102 @@
+menu "Gateway"
+
+    menu "Identity"
+        config GW_HOSTNAME_PREFIX
+            string "Hostname prefix"
+            default "gateway"
+            help
+                mDNS hostname is <prefix><device id>, e.g. gateway1A2B.local. mDNS lets a browser
+                find the device by name on the local network without a DNS server.
+
+        choice GW_DEVICE_ID_LEN_CHOICE
+            prompt "Device ID length (hex digits from the MAC)"
+            default GW_DEVICE_ID_LEN_4
+            help
+                The ID is taken from the end of the Wi-Fi MAC address, so it is unique per chip
+                without any provisioning. 4 digits are easy to read; with many devices on one LAN,
+                6 digits make two devices sharing an ID very unlikely (1 in 16 million vs 65 536).
+            config GW_DEVICE_ID_LEN_4
+                bool "4 digits"
+            config GW_DEVICE_ID_LEN_6
+                bool "6 digits"
+        endchoice
+
+        config GW_DEVICE_ID_LEN
+            int
+            default 6 if GW_DEVICE_ID_LEN_6
+            default 4
+    endmenu
+
+    menu "Setup Wi-Fi (SoftAP)"
+        config GW_AP_SSID_PREFIX
+            string "Setup network name prefix"
+            default "Gateway-Setup-"
+            help
+                The setup network is called <prefix><device id>.
+
+        choice GW_AP_AUTH
+            prompt "Setup network password"
+            default GW_AP_AUTH_FIXED
+            help
+                The setup pages use plain HTTP, so everything typed there (new admin password,
+                Wi-Fi password, maybe a private key) is only protected by the setup network's
+                WPA2 encryption. An open network is therefore not offered.
+            config GW_AP_AUTH_FIXED
+                bool "Same password on every device (learning)"
+                help
+                    Simple while experimenting, but anyone who knows the default can join and
+                    read setup traffic.
+            config GW_AP_AUTH_PER_DEVICE
+                bool "Unique random password per device (product)"
+                help
+                    12 random characters generated on first boot (or written at manufacturing)
+                    and kept in the "factory" partition, which a factory reset does not erase,
+                    so a printed label stays valid. Printed on the serial console at boot.
+        endchoice
+
+        config GW_AP_PASSWORD
+            string "Fixed setup network password"
+            depends on GW_AP_AUTH_FIXED
+            default "setup1234"
+            help
+                WPA2 needs 8 to 63 characters; the device refuses to start setup otherwise.
+
+        config GW_AP_CHANNEL
+            int "Setup network channel"
+            range 1 13
+            default 1
+    endmenu
+
+    menu "Login"
+        config GW_DEFAULT_USER
+            string "Admin user name"
+            default "admin"
+
+        config GW_DEFAULT_PASSWORD
+            string "Default admin password (must be changed at setup)"
+            default "admin"
+            help
+                Only valid until the setup wizard's mandatory password change.
+
+        config GW_MAX_SESSIONS
+            int "Maximum logged-in sessions"
+            range 1 16
+            default 4
+            help
+                When full, a new login replaces the least recently used session.
+
+        config GW_SESSION_TIMEOUT_MIN
+            int "Session idle timeout (minutes)"
+            range 1 1440
+            default 15
+
+        config GW_PBKDF2_ITERATIONS
+            int "Password hash iterations (PBKDF2-HMAC-SHA256)"
+            range 1000 200000
+            default 10000
+            help
+                More iterations make stolen hashes slower to brute-force but make each login
+                slower too. 10000 takes well under a second on an ESP32.
+    endmenu
+
+endmenu

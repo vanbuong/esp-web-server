@@ -1,0 +1,2 @@
+# Profile: classic ESP32, no PSRAM, 4 MB flash.
+CONFIG_IDF_TARGET="esp32"

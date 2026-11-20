@@ -1,0 +1,13 @@
+# Shared by every profile. Per-profile overrides live in sdkconfig.defaults.<profile>.
+
+# Custom A/B OTA layout with web-UI partitions (partitions.csv).
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+
+# Save crash dumps to the coredump partition for later analysis (idf.py coredump-info).
+CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
+
+# Certificates are accepted regardless of the clock: the device may have no time source
+# (spec section 5). Dates are only displayed when SNTP works.
+# CONFIG_MBEDTLS_HAVE_TIME_DATE is not set

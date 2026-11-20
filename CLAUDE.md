@@ -57,11 +57,13 @@ These rules take precedence over any skill. Skills take precedence over default 
 Also: no `[DBG-` logs left, no secrets in logs or committed files.
 
 ## Commands
-Run from an ESP-IDF terminal (export.ps1 sourced). If `idf.py` is not on PATH, say so — do not guess results.
-- Build one profile: `idf.py -B build/esp32 -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.esp32" set-target esp32 build`
-- Build all profiles: `./tools/build_all.ps1`
-- Host unit tests: `cd test/host; idf.py --preview set-target linux; idf.py build; ./build/host_test.elf`
-- Flash + monitor (user runs it): `idf.py -B build/esp32 -p COMx flash monitor`
+Builds and host tests run in WSL (Ubuntu-22.04, ESP-IDF v6.1.1 installed by EIM at
+`~/.espressif/v6.1.1`) through these wrappers; logs go to `build/<profile>.log` / `test/host/build-linux.log`.
+- Host unit tests: `./tools/host_test.ps1` (exit code = number of failures)
+- Build one profile: `./tools/build.ps1 esp32` (add `size` for the size report)
+- Build all profiles (plan 5): `./tools/build_all.ps1`
+- Flash + monitor (user runs it, Windows ESP-IDF PowerShell): `idf.py -B build/esp32 -p COMx flash monitor`
+Never use `idf.py set-target` on a profile build dir: it wipes it; the scripts pass `-D IDF_TARGET`.
 
 ## Hard rules
 - Never commit private keys, `.p12` files or `tools/pki/out/`. The CA private key never goes on a device.
