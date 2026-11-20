@@ -2,6 +2,7 @@ idf_component_register(SRCS "test_main.c"
                             "test_dev_id.c"
                             "test_password.c"
                             "test_auth.c"
+                            "test_setup.c"
                        REQUIRES unity gw_core)
 
 # linux target only: libtfpsacrypto.a needs esp_mbedtls_mem_calloc/free from the IDF mbedtls
