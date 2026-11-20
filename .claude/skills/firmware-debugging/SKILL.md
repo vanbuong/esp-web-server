@@ -5,6 +5,7 @@ description: Root-cause-first debugging for the ESP32 gateway firmware. Use for 
 
 # Firmware debugging
 
+Use together with `systematic-debugging` (the general four-phase process); this adds the ESP32 specifics.
 Adapted from obra/superpowers `systematic-debugging` and mattpocock/skills `diagnosing-bugs` (MIT).
 
 **Iron rule: no fix until the root cause is found and stated.**
@@ -33,7 +34,7 @@ Redact secrets (passwords, keys, PSKs) from anything you paste or save.
 ## 4. Fix
 - Write a failing test first if the bug is in host-testable logic (`firmware-tdd`).
 - One fix at the root cause, not around the symptom (don't just enlarge a stack without knowing the peak — measure with `uxTaskGetStackHighWaterMark`).
-- Verify with the original loop, then `verify-before-done`. Remove every `[DBG-` line.
+- Verify with the original loop, then `verification-before-completion`. Remove every `[DBG-` line.
 
 ## 5. Three strikes
 If three fixes fail, stop. Tell the user what was tried and what that rules out, and question the

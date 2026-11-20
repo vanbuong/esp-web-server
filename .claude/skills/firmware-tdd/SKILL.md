@@ -5,6 +5,7 @@ description: Test-driven development for ESP-IDF component logic using host (lin
 
 # Firmware TDD (red → green → refactor)
 
+Use together with `test-driven-development` (the general iron law); this adds the ESP-IDF specifics.
 Adapted from obra/superpowers `test-driven-development` and mattpocock/skills `tdd` (MIT).
 
 ## Where tests live

@@ -13,3 +13,7 @@ tools/pki/out/
 *.pfx
 
 .vscode/
+
+# Agent workspaces
+.superpowers/
+.worktrees/
