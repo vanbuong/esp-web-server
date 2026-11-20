@@ -111,7 +111,12 @@ static void status_extra(httpd_req_t *req, cJSON *o, bool logged_in)
     cJSON_AddStringToObject(c, "key_type", s_cert.key_type);
 }
 
-esp_err_t gw_http_admin_register(httpd_handle_t srv);   // gw_http_admin_api.c (task 9)
+esp_err_t gw_http_admin_register(httpd_handle_t srv);   // gw_http_admin_api.c
+
+const gw_tls_info_t *gw_http_admin_cert(void)
+{
+    return &s_cert;
+}
 
 esp_err_t gw_http_admin_start(const gw_http_admin_cfg_t *cfg)
 {
