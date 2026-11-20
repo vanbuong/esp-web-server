@@ -29,10 +29,10 @@
 ```
 app_main
  ├─ device id from Wi-Fi MAC → "1A2B", hostname "gateway1A2B", SSID "Gateway-Setup-1A2B"
- ├─ gw_store_init  (NVS "nvs" + "factory" partitions)
+ ├─ gw_store_init  (NVS "nvs" + "fctry" partitions)
  ├─ state == PROVISIONED → (plan 2: station mode + HTTPS)   — today: log and stop
  └─ SETUP mode
-     ├─ setup password: Kconfig, or per-device from "factory" (generated on first boot)
+     ├─ setup password: Kconfig, or per-device from "fctry" (generated on first boot)
      ├─ Wi-Fi APSTA: WPA2 access point 192.168.4.1 + idle station for scan/test
      ├─ captive DNS: every name → 192.168.4.1 (phones pop up the setup page)
      ├─ mDNS: gateway1A2B.local, service _http._tcp:80
@@ -68,11 +68,11 @@ PASSWORD ──change pw──▶ WIFI ──test ok──▶ TLS ──(plan 2)
 
 | Partition | Size | What and why |
 |---|---|---|
-| `nvs` | 24 KB | state, setup step, password hash, Wi-Fi credentials (and plan 2: TLS key/certs). Erased by factory reset. |
+| `nvs` | 48 KB | state, setup step, password hash, Wi-Fi credentials, TLS key + certificates (up to ~6 KB, and NVS needs a spare page to rewrite records). Erased by factory reset. |
 | `otadata` | 8 KB | which app slot boots; written by OTA updates |
 | `phy_init` | 4 KB | radio calibration data |
 | `nvs_keys` | 4 KB | reserved for NVS encryption keys (product hardening, off for now) |
-| `factory` | 12 KB | per-device data that survives factory reset: the setup Wi-Fi password |
+| `fctry` | 12 KB | per-device data that survives factory reset: the setup Wi-Fi password |
 | `ota_0` / `ota_1` | 1.5 MB each | two firmware slots: an update is written to the idle slot, so a failed update never bricks the device |
 | `www_0` / `www_1` | 256 KB each | web UI (plan 3), paired with `ota_0` / `ota_1` so firmware and UI versions always match |
 | `coredump` | 64 KB | crash dump for post-mortem analysis (`idf.py coredump-info`) |

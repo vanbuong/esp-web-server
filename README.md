@@ -58,7 +58,7 @@ the values it already has, and defaults only fill in options that are missing.
 | Hostname prefix | `gateway` | mDNS name is `<prefix><id>.local` |
 | Device ID length | 4 hex digits | from the MAC; 6 digits make two devices on one LAN sharing an ID very unlikely |
 | Setup network name prefix | `Gateway-Setup-` | SSID is `<prefix><id>` |
-| Setup network password | fixed `setup1234` | setup traffic is plain HTTP, so only WPA2 protects it; "per device" makes a random 12-char password kept in the `factory` partition (survives factory reset, printed on serial at boot) |
+| Setup network password | fixed `setup1234` | setup traffic is plain HTTP, so only WPA2 protects it; "per device" makes a random 12-char password kept in the `fctry` partition (survives factory reset, printed on serial at boot) |
 | Setup network channel | 1 | |
 | Admin user / default password | `admin` / `admin` | default only works until the mandatory password change |
 | Max sessions / idle timeout | 4 / 15 min | |

@@ -7,7 +7,7 @@
 static const char *TAG = "gw_store";
 
 #define NS_MAIN "gw"            // in the default "nvs" partition (erased by factory reset)
-#define PART_FACTORY "factory"  // survives factory reset
+#define PART_FACTORY "fctry"    // survives factory reset ("factory" is reserved as an app subtype name)
 #define NS_FACTORY "fct"
 
 static esp_err_t init_part(const char *label)
@@ -191,5 +191,5 @@ esp_err_t gw_store_set_ap_password(const char *pw)
 
 esp_err_t gw_store_factory_reset(void)
 {
-    return nvs_flash_erase();   // default "nvs" partition only; "factory" is untouched
+    return nvs_flash_erase();   // default "nvs" partition only; "fctry" is untouched
 }

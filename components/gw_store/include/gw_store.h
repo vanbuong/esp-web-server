@@ -1,6 +1,6 @@
 #pragma once
 // Persistent device state in NVS (ESP-IDF's key-value store in flash).
-// Two partitions: "nvs" holds everything a factory reset erases; "factory" holds per-device
+// Two partitions: "nvs" holds everything a factory reset erases; "fctry" holds per-device
 // data that must survive it (the setup Wi-Fi password printed on the label).
 // Each credential set (password salt+hash, Wi-Fi ssid+password) is one NVS key, so it is
 // replaced atomically. Rule for callers: save a step's data BEFORE advancing the step, so a power cut can only
@@ -31,7 +31,7 @@ esp_err_t gw_store_set_password(const uint8_t salt[GW_PW_SALT_LEN], const uint8_
 esp_err_t gw_store_get_wifi(char ssid[33], char pass[65]);
 esp_err_t gw_store_set_wifi(const char *ssid, const char *pass);
 
-/** "factory" partition. ESP_ERR_NOT_FOUND if none saved. */
+/** "fctry" partition. ESP_ERR_NOT_FOUND if none saved. */
 esp_err_t gw_store_get_ap_password(char out[GW_AP_PW_LEN + 1]);
 esp_err_t gw_store_set_ap_password(const char *pw);
 

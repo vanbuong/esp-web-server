@@ -13,7 +13,7 @@
 
 static const char *TAG = "main";
 
-// Setup network password: fixed from Kconfig, or unique per device kept in the "factory"
+// Setup network password: fixed from Kconfig, or unique per device kept in the "fctry"
 // partition (generated on first boot if a manufacturer didn't write one).
 #define AP_PW_BUF 64   // fits a 63-char WPA2 passphrase and the 12-char per-device one
 static esp_err_t get_ap_password(char out[AP_PW_BUF])

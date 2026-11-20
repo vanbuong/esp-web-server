@@ -7,7 +7,7 @@
 static void fresh(void)
 {
     nvs_flash_erase();
-    nvs_flash_erase_partition("factory");
+    nvs_flash_erase_partition("fctry");
     TEST_ASSERT_EQUAL(ESP_OK, gw_store_init());
 }
 

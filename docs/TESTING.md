@@ -16,7 +16,7 @@ Builds `test/host` for ESP-IDF's `linux` target in WSL and runs the Unity tests 
 | `test_auth.c` | default vs changed password, lockout timing, idle timeout, token checks, LRU eviction, cookies |
 | `test_setup.c` | wizard order: no skipping, redo earlier steps, sanitizing stored values |
 | `test_wifi_util.c` | scan dedupe/sort/cap, JSON escaping of odd SSIDs, Wi-Fi credential rules, setup password alphabet |
-| `test_store.c` | NVS defaults, round trips, factory reset keeps the `factory` partition |
+| `test_store.c` | NVS defaults, round trips, factory reset keeps the `fctry` partition |
 
 ## 2. Firmware build
 

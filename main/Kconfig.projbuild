@@ -50,7 +50,7 @@ menu "Gateway"
                 bool "Unique random password per device (product)"
                 help
                     12 random characters generated on first boot (or written at manufacturing)
-                    and kept in the "factory" partition, which a factory reset does not erase,
+                    and kept in the "fctry" partition, which a factory reset does not erase,
                     so a printed label stays valid. Printed on the serial console at boot.
         endchoice
 
