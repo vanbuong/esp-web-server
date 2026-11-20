@@ -4,7 +4,8 @@ idf_component_register(SRCS "test_main.c"
                             "test_auth.c"
                             "test_setup.c"
                             "test_wifi_util.c"
-                       REQUIRES unity gw_core espressif__cjson)
+                            "test_store.c"
+                       REQUIRES unity gw_core gw_store nvs_flash espressif__cjson)
 
 # linux target only: libtfpsacrypto.a needs esp_mbedtls_mem_calloc/free from the IDF mbedtls
 # component lib, which the linker has already passed by then (link order). -u makes the linker
