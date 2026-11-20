@@ -12,8 +12,9 @@ ESP-IDF firmware for a "gateway" device that a non-expert sets up from a browser
 Learning project that is meant to become product-ready: see `docs/specs/2026-11-20-gateway-design.md`
 for the full design and `docs/plans/2026-11-20-roadmap.md` for the build order.
 
-**Status:** plan 1 done — setup mode (setup Wi-Fi, captive portal, mDNS, login, password change,
-Wi-Fi scan/test/save) through a JSON API. No web UI yet (plan 3); HTTPS comes in plan 2.
+**Status:** plans 1–2 done — full setup wizard (password, Wi-Fi, TLS identity via device CSR or
+upload, finish) and normal mode (station Wi-Fi, HTTPS admin API with server-auth or mutual TLS, PKI
+scripts). Everything is a JSON API for now; the web UI comes in plan 3.
 
 ## Toolchain (one-time)
 
@@ -22,6 +23,7 @@ Wi-Fi scan/test/save) through a JSON API. No web UI yet (plan 3); HTTPS comes in
 | WSL Ubuntu-22.04 | ESP-IDF **v6.1.1** via Espressif Installation Manager (EIM) → `~/.espressif/v6.1.1` | building firmware, host tests |
 | WSL | `sudo apt-get install -y flex bison gperf ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0 libbsd-dev` | host (`linux` target) builds |
 | Windows | ESP-IDF v6.1.1 via EIM, **with Python ≥ 3.10 (64-bit, python.org)** | flashing + serial monitor |
+| Windows | Git for Windows (bash + OpenSSL) | certificate scripts in `tools/pki` |
 
 Why builds run in WSL: ESP-IDF's `linux` target (used for unit tests on the PC) needs a POSIX host,
 and keeping firmware builds there too means one toolchain for both.
@@ -42,9 +44,15 @@ If PowerShell refuses to run the scripts ("running scripts is disabled"), prefix
 |---|---|
 | Unit tests on the PC | `./tools/host_test.ps1` (exit code = number of failures) |
 | Build firmware | `./tools/build.ps1 esp32` (`./tools/build.ps1 esp32 size` adds a size report) |
-| Flash + serial log | in the **ESP-IDF 6.1 PowerShell**: `idf.py -B build/esp32 -p COM5 flash monitor` (Ctrl+] quits) |
-| Wipe the device first | `idf.py -B build/esp32 -p COM5 erase-flash flash monitor` |
-| Smoke-test the setup API | join the setup Wi-Fi, then `./tools/smoke/setup_api.ps1 -Ssid "<your wifi>" -WifiPass "<password>"` |
+| Flash + serial log | `./tools/flash.ps1 -Port COM17 -Monitor` (Ctrl+] quits the monitor) |
+| Wipe the device first | `./tools/flash.ps1 -Port COM17 -Erase -Monitor` (erases settings, keys and the per-device password) |
+| Make your CA (once) | `./tools/pki/make_ca.ps1` → `tools/pki/out/ca.key` + `ca.crt` (see [docs/PKI.md](docs/PKI.md)) |
+| Browser certificate (mutual TLS) | `./tools/pki/make_client.ps1 laptop1` → import `tools/pki/out/laptop1.p12` |
+| Smoke-test setup mode | join the setup Wi-Fi, then `./tools/smoke/setup_api.ps1 -Ssid "<your wifi>" -WifiPass "<password>" -Pki tools/pki/out` (ends with the device rebooting into normal mode) |
+| Smoke-test normal mode | on the same LAN as the gateway: `python tools/smoke/normal_api.py --host gatewayXXXX --ca tools/pki/out/ca.crt --cert tools/pki/out/laptop1.crt --key tools/pki/out/laptop1.key --password <admin password>` (add `--renew --pki tools/pki/out` to test certificate renewal) |
+
+`flash.ps1` uses esptool directly: the build folder is configured in WSL, so Windows `idf.py flash`
+would try to reconfigure it.
 
 Build logs: `build/<profile>.log`, `test/host/build-linux.log`.
 
@@ -63,18 +71,21 @@ the values it already has, and defaults only fill in options that are missing.
 | Admin user / default password | `admin` / `admin` | default only works until the mandatory password change |
 | Max sessions / idle timeout | 4 / 15 min | |
 | PBKDF2 iterations | 10000 | slower brute-forcing of a leaked hash vs slower login |
+| HTTPS client authentication | mutual TLS | mutual: browsers need a certificate from your CA before anything is served; server-auth: normal HTTPS, password only |
+| SNTP time server | `pool.ntp.org` | only to display dates (certificate expiry); works without internet |
 
 ## Repository map
 
 ```
-main/                 boot logic (main.c) and Kconfig options
-components/gw_core    pure logic, unit-tested on the PC: device id, passwords, sessions, setup steps, Wi-Fi helpers
+main/                 boot logic (main.c: setup mode vs normal mode) and Kconfig options
+components/gw_core    pure logic, unit-tested on the PC: device id, passwords, sessions, setup steps,
+                      Wi-Fi helpers, certificate checks, device key + CSR
 components/gw_store   NVS storage (also unit-tested on the PC)
-components/gw_net     Wi-Fi (SoftAP + station), captive DNS, mDNS
-components/gw_http    setup-mode HTTP server and JSON API
-test/host             Unity test app for the linux target
-tools/                build/test wrappers (PowerShell → WSL), smoke test
-docs/                 design, plans, architecture, testing
+components/gw_net     Wi-Fi (setup AP + station with backoff), captive DNS, mDNS, SNTP
+components/gw_http    setup server (HTTP), admin server (HTTPS), HTTP→HTTPS redirect, JSON APIs
+test/host             Unity test app for the linux target (TLS fixtures generated on each run)
+tools/                build/test/flash wrappers, PKI scripts (tools/pki), smoke tests (tools/smoke)
+docs/                 design, plans, architecture, PKI, testing
 ```
 
-More: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · [docs/TESTING.md](docs/TESTING.md)
+More: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · [docs/PKI.md](docs/PKI.md) · [docs/TESTING.md](docs/TESTING.md)
