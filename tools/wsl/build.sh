@@ -13,7 +13,7 @@ mkdir -p build
 if ! idf.py -B "build/$profile" -D IDF_TARGET="$target" -D SDKCONFIG="build/$profile/sdkconfig" \
         -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.$profile" build "$@" >"$log" 2>&1; then
     echo "build $profile FAILED — see $log"
-    grep -E ": (fatal )?error:|undefined reference|CMake Error|unknown kconfig" "$log" | sort -u | head -30
+    grep -E -A4 ": (fatal )?error:|undefined reference|CMake Error|unknown kconfig" "$log" | head -30
     tail -15 "$log"
     exit 1
 fi

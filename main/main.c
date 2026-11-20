@@ -6,6 +6,8 @@
 #include "gw_dev_id.h"
 #include "gw_store.h"
 #include "gw_wifi.h"
+#include "gw_dns.h"
+#include "gw_mdns.h"
 #include "gw_wifi_util.h"
 
 static const char *TAG = "main";
@@ -62,4 +64,9 @@ void app_main(void)
         return;
     }
     ESP_ERROR_CHECK(gw_wifi_start_setup(ssid, ap_pw, CONFIG_GW_AP_CHANNEL));
+    ESP_ERROR_CHECK(gw_dns_start());
+
+    char instance[48];
+    ESP_ERROR_CHECK(gw_name_join("Gateway ", id, instance, sizeof(instance)));
+    ESP_ERROR_CHECK(gw_mdns_start(host, instance, false));
 }

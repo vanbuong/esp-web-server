@@ -11,3 +11,6 @@ CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
 # Certificates are accepted regardless of the clock: the device may have no time source
 # (spec section 5). Dates are only displayed when SNTP works.
 # CONFIG_MBEDTLS_HAVE_TIME_DATE is not set
+
+# mDNS debug console commands need the console component, which MINIMAL_BUILD leaves out.
+# CONFIG_MDNS_ENABLE_CONSOLE_CLI is not set
