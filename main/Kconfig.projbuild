@@ -100,6 +100,20 @@ menu "Gateway"
     endmenu
 
     menu "Normal mode"
+        choice GW_TLS_MODE
+            prompt "HTTPS client authentication"
+            default GW_TLS_MODE_MUTUAL
+            help
+                Mutual: browsers must present a certificate signed by your CA (tools/pki/make_client),
+                otherwise the TLS handshake fails and they see nothing - then they log in with the
+                admin password too. Server-auth: normal HTTPS; anyone on the network can reach the
+                login page and only the password protects it.
+            config GW_TLS_MODE_MUTUAL
+                bool "Mutual TLS (client certificate required)"
+            config GW_TLS_MODE_SERVER_AUTH
+                bool "Server authentication only"
+        endchoice
+
         config GW_SNTP_SERVER
             string "SNTP time server"
             default "pool.ntp.org"

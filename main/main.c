@@ -9,6 +9,7 @@
 #include "gw_dns.h"
 #include "gw_mdns.h"
 #include "gw_http_setup.h"
+#include "gw_http_admin.h"
 #include "gw_time.h"
 #include "esp_system.h"
 #include "gw_wifi_util.h"
@@ -94,7 +95,19 @@ static void normal_mode(void)
     memset(wifi_pass, 0, sizeof(wifi_pass));
     ESP_ERROR_CHECK(gw_time_start(CONFIG_GW_SNTP_SERVER));
     ESP_ERROR_CHECK(gw_mdns_start(s_host, s_instance, true));
-    ESP_LOGI(TAG, "normal mode: HTTPS server arrives in plan 2 task 8");
+    const gw_http_admin_cfg_t admin = {
+        .device_id = s_id,
+        .hostname = s_host,
+        .fw_version = esp_app_get_description()->version,
+        .defaults = &s_defaults,
+        .key_pem = tls.key,
+        .cert_pem = tls.cert,
+        .ca_pem = tls.ca,
+    };
+    if (gw_http_admin_start(&admin) == ESP_ERR_INVALID_STATE) {
+        back_to_setup(GW_STEP_TLS, "stored TLS identity no longer valid");
+    }
+    ESP_ERROR_CHECK(gw_http_redirect_start(s_host));
 }
 
 void app_main(void)

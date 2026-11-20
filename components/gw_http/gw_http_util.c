@@ -101,15 +101,12 @@ bool gw_http_session_token(httpd_req_t *req, char tok[GW_TOKEN_HEX_LEN + 1])
     return ok;
 }
 
-void gw_http_set_session_cookie(httpd_req_t *req, const char *token, char buf[128])
+void gw_http_set_session_cookie(httpd_req_t *req, const char *token, bool secure, char buf[160])
 {
     // HttpOnly: page scripts can't read it (limits XSS damage). SameSite=Strict: other sites
-    // can't make the browser send it (blocks CSRF). Secure is added in HTTPS mode (plan 2).
-    if (token) {
-        snprintf(buf, 128, GW_COOKIE_NAME "=%s; Path=/; HttpOnly; SameSite=Strict", token);
-    } else {
-        snprintf(buf, 128, GW_COOKIE_NAME "=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0");
-    }
+    // can't make the browser send it (blocks CSRF). Secure: never sent over plain HTTP.
+    snprintf(buf, 160, GW_COOKIE_NAME "=%s; Path=/; HttpOnly; SameSite=Strict%s%s", token ? token : "",
+             secure ? "; Secure" : "", token ? "" : "; Max-Age=0");
     httpd_resp_set_hdr(req, "Set-Cookie", buf);
 }
 

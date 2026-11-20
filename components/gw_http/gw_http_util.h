@@ -38,8 +38,11 @@ const char *gw_json_str(const cJSON *obj, const char *key);
 /** Session token from the Cookie header; false if none. */
 bool gw_http_session_token(httpd_req_t *req, char tok[GW_TOKEN_HEX_LEN + 1]);
 
-/** Sets the session cookie header. buf must stay alive until the response is sent. */
-void gw_http_set_session_cookie(httpd_req_t *req, const char *token, char buf[128]);
+/**
+ * Sets the session cookie header (token NULL = delete it). secure adds the Secure attribute
+ * (HTTPS only). buf must stay alive until the response is sent.
+ */
+void gw_http_set_session_cookie(httpd_req_t *req, const char *token, bool secure, char buf[160]);
 
 uint32_t gw_http_now_s(void);
 
