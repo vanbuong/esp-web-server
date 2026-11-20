@@ -6,6 +6,7 @@
 // replaced atomically. Rule for callers: save a step's data BEFORE advancing the step, so a power cut can only
 // make the user repeat a step, never skip one.
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include "esp_err.h"
 #include "gw_setup.h"
@@ -34,6 +35,20 @@ esp_err_t gw_store_set_wifi(const char *ssid, const char *pass);
 /** "fctry" partition. ESP_ERR_NOT_FOUND if none saved. */
 esp_err_t gw_store_get_ap_password(char out[GW_AP_PW_LEN + 1]);
 esp_err_t gw_store_set_ap_password(const char *pw);
+
+/**
+ * TLS identity: private key + certificate (chain) + CA, kept as ONE NVS record so a power cut
+ * can never leave a key paired with the wrong certificate. Strings are heap copies.
+ */
+typedef struct { char *key; char *cert; char *ca; } gw_tls_rec_t;
+esp_err_t gw_store_set_tls(const char *key, const char *cert, const char *ca);
+esp_err_t gw_store_get_tls(gw_tls_rec_t *out);   // ESP_ERR_NOT_FOUND if none
+void gw_store_tls_free(gw_tls_rec_t *rec);
+
+/** Key generated for a CSR that hasn't been answered with a certificate yet. */
+esp_err_t gw_store_set_pending_key(const char *key_pem);
+esp_err_t gw_store_get_pending_key(char *out, size_t len);   // ESP_ERR_NOT_FOUND if none
+esp_err_t gw_store_clear_pending_key(void);
 
 /** Erases the "nvs" partition only (state, password, Wi-Fi). Call gw_store_init() again after. */
 esp_err_t gw_store_factory_reset(void);

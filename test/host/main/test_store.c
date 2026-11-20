@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include <string.h>
 #include "unity.h"
 #include "nvs.h"
@@ -100,8 +101,82 @@ static void test_wifi_max_lengths(void)
     TEST_ASSERT_EQUAL_STRING(p, p2);
 }
 
+static char *filled(size_t n, char c)
+{
+    char *s = malloc(n + 1);
+    memset(s, c, n);
+    s[n] = 0;
+    return s;
+}
+
+static void test_tls_absent_on_fresh(void)
+{
+    fresh();
+    gw_tls_rec_t r;
+    TEST_ASSERT_EQUAL(ESP_ERR_NOT_FOUND, gw_store_get_tls(&r));
+}
+
+static void test_tls_roundtrip(void)
+{
+    fresh();
+    char *k = filled(300, 'k'), *c = filled(4096, 'c'), *a = filled(1500, 'a');
+    TEST_ASSERT_EQUAL(ESP_OK, gw_store_set_tls(k, c, a));
+    gw_tls_rec_t r;
+    TEST_ASSERT_EQUAL(ESP_OK, gw_store_get_tls(&r));
+    TEST_ASSERT_EQUAL_STRING(k, r.key);
+    TEST_ASSERT_EQUAL_STRING(c, r.cert);
+    TEST_ASSERT_EQUAL_STRING(a, r.ca);
+    gw_store_tls_free(&r);
+    TEST_ASSERT_NULL(r.key);
+    free(k); free(c); free(a);
+}
+
+static void test_tls_replace(void)
+{
+    fresh();
+    TEST_ASSERT_EQUAL(ESP_OK, gw_store_set_tls("k1", "c1", "a1"));
+    TEST_ASSERT_EQUAL(ESP_OK, gw_store_set_tls("key2", "cert2", "ca2"));
+    gw_tls_rec_t r;
+    TEST_ASSERT_EQUAL(ESP_OK, gw_store_get_tls(&r));
+    TEST_ASSERT_EQUAL_STRING("key2", r.key);
+    TEST_ASSERT_EQUAL_STRING("cert2", r.cert);
+    TEST_ASSERT_EQUAL_STRING("ca2", r.ca);
+    gw_store_tls_free(&r);
+}
+
+static void test_pending_key_roundtrip_and_clear(void)
+{
+    fresh();
+    char out[64];
+    TEST_ASSERT_EQUAL(ESP_ERR_NOT_FOUND, gw_store_get_pending_key(out, sizeof(out)));
+    TEST_ASSERT_EQUAL(ESP_OK, gw_store_set_pending_key("pendingkey"));
+    TEST_ASSERT_EQUAL(ESP_OK, gw_store_get_pending_key(out, sizeof(out)));
+    TEST_ASSERT_EQUAL_STRING("pendingkey", out);
+    TEST_ASSERT_EQUAL(ESP_OK, gw_store_clear_pending_key());
+    TEST_ASSERT_EQUAL(ESP_ERR_NOT_FOUND, gw_store_get_pending_key(out, sizeof(out)));
+    TEST_ASSERT_EQUAL(ESP_OK, gw_store_clear_pending_key());   // clearing twice is fine
+}
+
+static void test_factory_reset_clears_tls(void)
+{
+    fresh();
+    TEST_ASSERT_EQUAL(ESP_OK, gw_store_set_tls("k", "c", "a"));
+    TEST_ASSERT_EQUAL(ESP_OK, gw_store_set_pending_key("p"));
+    TEST_ASSERT_EQUAL(ESP_OK, gw_store_factory_reset());
+    TEST_ASSERT_EQUAL(ESP_OK, gw_store_init());
+    gw_tls_rec_t r;
+    char out[8];
+    TEST_ASSERT_EQUAL(ESP_ERR_NOT_FOUND, gw_store_get_tls(&r));
+    TEST_ASSERT_EQUAL(ESP_ERR_NOT_FOUND, gw_store_get_pending_key(out, sizeof(out)));
+}
+
 void run_store_tests(void)
 {
+    RUN_TEST(test_tls_absent_on_fresh);
+    RUN_TEST(test_tls_roundtrip);
+    RUN_TEST(test_tls_replace);
+    RUN_TEST(test_pending_key_roundtrip_and_clear);
+    RUN_TEST(test_factory_reset_clears_tls);
     RUN_TEST(test_fresh_defaults);
     RUN_TEST(test_roundtrip_all);
     RUN_TEST(test_invalid_step_sanitized);

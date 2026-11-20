@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include <string.h>
 #include "esp_check.h"
 #include "nvs.h"
@@ -5,6 +6,15 @@
 #include "gw_store.h"
 
 static const char *TAG = "gw_store";
+
+// Wipe key material before freeing (volatile writes the compiler can't optimize away).
+static void secure_wipe(void *p, size_t n)
+{
+    volatile uint8_t *v = p;
+    while (n--) {
+        *v++ = 0;
+    }
+}
 
 #define NS_MAIN "gw"            // in the default "nvs" partition (erased by factory reset)
 #define PART_FACTORY "fctry"    // survives factory reset ("factory" is reserved as an app subtype name)
@@ -182,6 +192,130 @@ esp_err_t gw_store_set_ap_password(const char *pw)
     ESP_RETURN_ON_ERROR(nvs_open_from_partition(PART_FACTORY, NS_FACTORY, NVS_READWRITE, &h),
                         TAG, "open factory");
     esp_err_t err = nvs_set_str(h, "ap_pass", pw);
+    if (err == ESP_OK) {
+        err = nvs_commit(h);
+    }
+    nvs_close(h);
+    return err;
+}
+
+// TLS record layout: three u16 lengths (each including its NUL), then key, cert, ca.
+// One blob = one atomic NVS write (NVS splits big blobs into chunks but switches versions at once).
+typedef struct {
+    uint16_t key_len, cert_len, ca_len;
+} tls_hdr_t;
+
+esp_err_t gw_store_set_tls(const char *key, const char *cert, const char *ca)
+{
+    size_t kl = strlen(key) + 1, cl = strlen(cert) + 1, al = strlen(ca) + 1;
+    ESP_RETURN_ON_FALSE(kl <= UINT16_MAX && cl <= UINT16_MAX && al <= UINT16_MAX,
+                        ESP_ERR_INVALID_SIZE, TAG, "tls too big");
+    size_t total = sizeof(tls_hdr_t) + kl + cl + al;
+    uint8_t *buf = malloc(total);
+    ESP_RETURN_ON_FALSE(buf, ESP_ERR_NO_MEM, TAG, "no mem");
+    tls_hdr_t h = {.key_len = kl, .cert_len = cl, .ca_len = al};
+    memcpy(buf, &h, sizeof(h));
+    memcpy(buf + sizeof(h), key, kl);
+    memcpy(buf + sizeof(h) + kl, cert, cl);
+    memcpy(buf + sizeof(h) + kl + cl, ca, al);
+    esp_err_t err = set_rec("tls", buf, total);
+    secure_wipe(buf, total);   // it held a private key
+    free(buf);
+    return err;
+}
+
+// Reads the whole "tls" blob into a malloc'd buffer (caller wipes + frees).
+static esp_err_t read_tls_blob(uint8_t **buf, size_t *n)
+{
+    nvs_handle_t h;
+    esp_err_t err = nvs_open(NS_MAIN, NVS_READONLY, &h);
+    if (err != ESP_OK) {
+        return err;
+    }
+    err = nvs_get_blob(h, "tls", NULL, n);   // size only
+    if (err == ESP_OK) {
+        *buf = malloc(*n);
+        err = *buf ? nvs_get_blob(h, "tls", *buf, n) : ESP_ERR_NO_MEM;
+    }
+    nvs_close(h);
+    return err;
+}
+
+esp_err_t gw_store_get_tls(gw_tls_rec_t *out)
+{
+    memset(out, 0, sizeof(*out));
+    uint8_t *buf = NULL;
+    size_t n = 0;
+    esp_err_t err = read_tls_blob(&buf, &n);
+    tls_hdr_t hd = {0};
+    if (err == ESP_OK) {
+        if (n >= sizeof(hd)) {
+            memcpy(&hd, buf, sizeof(hd));
+        }
+        if (n < sizeof(hd) || !hd.key_len || !hd.cert_len || !hd.ca_len ||
+                sizeof(hd) + hd.key_len + hd.cert_len + hd.ca_len != n) {
+            err = ESP_ERR_INVALID_SIZE;   // corrupt record
+        }
+    }
+    if (err == ESP_OK) {
+        const char *p = (const char *)buf + sizeof(hd);
+        out->key = strndup(p, hd.key_len - 1);
+        out->cert = strndup(p + hd.key_len, hd.cert_len - 1);
+        out->ca = strndup(p + hd.key_len + hd.cert_len, hd.ca_len - 1);
+        if (!out->key || !out->cert || !out->ca) {
+            gw_store_tls_free(out);
+            err = ESP_ERR_NO_MEM;
+        }
+    }
+    if (buf) {
+        secure_wipe(buf, n);   // it held the private key
+        free(buf);
+    }
+    return err == ESP_ERR_NVS_NOT_FOUND ? ESP_ERR_NOT_FOUND : err;
+}
+
+void gw_store_tls_free(gw_tls_rec_t *rec)
+{
+    if (rec->key) {
+        secure_wipe(rec->key, strlen(rec->key));
+    }
+    free(rec->key);
+    free(rec->cert);
+    free(rec->ca);
+    rec->key = rec->cert = rec->ca = NULL;
+}
+
+esp_err_t gw_store_set_pending_key(const char *key_pem)
+{
+    nvs_handle_t h;
+    ESP_RETURN_ON_ERROR(nvs_open(NS_MAIN, NVS_READWRITE, &h), TAG, "open");
+    esp_err_t err = nvs_set_str(h, "tls_pend", key_pem);
+    if (err == ESP_OK) {
+        err = nvs_commit(h);
+    }
+    nvs_close(h);
+    return err;
+}
+
+esp_err_t gw_store_get_pending_key(char *out, size_t len)
+{
+    nvs_handle_t h;
+    esp_err_t err = nvs_open(NS_MAIN, NVS_READONLY, &h);
+    if (err == ESP_OK) {
+        err = get_str(h, "tls_pend", out, len);
+        nvs_close(h);
+    }
+    return err == ESP_ERR_NVS_NOT_FOUND ? ESP_ERR_NOT_FOUND : err;
+}
+
+esp_err_t gw_store_clear_pending_key(void)
+{
+    nvs_handle_t h;
+    ESP_RETURN_ON_ERROR(nvs_open(NS_MAIN, NVS_READWRITE, &h), TAG, "open");
+    esp_err_t err = nvs_erase_key(h, "tls_pend");
+    if (err == ESP_ERR_NVS_NOT_FOUND) {
+        err = ESP_OK;
+    }
     if (err == ESP_OK) {
         err = nvs_commit(h);
     }
