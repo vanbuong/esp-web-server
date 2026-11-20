@@ -4,7 +4,9 @@ set -euo pipefail
 # Git Bash would rewrite "/CN=..." into a Windows path; turn that conversion off.
 export MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*'
 
-PKI_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# `pwd -W` (Git Bash) gives C:/... — a path the native Windows openssl.exe can open; on Linux it
+# fails and plain `pwd` is used.
+PKI_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && { pwd -W 2>/dev/null || pwd; })"
 PKI_OUT="${PKI_OUT:-$PKI_DIR/out}"
 
 die() { echo "error: $*" >&2; exit 1; }
