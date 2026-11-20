@@ -17,3 +17,6 @@ tools/pki/out/
 # Agent workspaces
 .superpowers/
 .worktrees/
+test/host/build-linux/
+test/host/build-linux.log
+test/host/sdkconfig

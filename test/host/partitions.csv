@@ -1,0 +1,4 @@
+# Host-test flash image (linux target emulates flash in a file): only what gw_store uses.
+# Name,  Type, SubType, Offset,  Size
+nvs,     data, nvs,     0x9000,  0x6000
+factory, data, nvs,     0x13000, 0x3000
