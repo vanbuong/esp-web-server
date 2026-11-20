@@ -9,6 +9,7 @@ idf_component_register(SRCS "test_main.c"
                             "test_wifi_util.c"
                             "test_store.c"
                             "test_tls_check.c"
+                            "test_tls_csr.c"
                        REQUIRES unity gw_core gw_store nvs_flash espressif__cjson mbedtls
                        EMBED_TXTFILES "${fx}/ca.crt" "${fx}/dev.key" "${fx}/dev.crt" "${fx}/dev_pkcs8.key"
                                       "${fx}/dev_rsa.key" "${fx}/dev_rsa.crt" "${fx}/dev_other_name.crt"

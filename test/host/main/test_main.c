@@ -20,6 +20,7 @@ void run_setup_tests(void);
 void run_wifi_util_tests(void);
 void run_store_tests(void);
 void run_tls_check_tests(void);
+void run_tls_csr_tests(void);
 
 void setUp(void) {}
 void tearDown(void) {}
@@ -34,5 +35,6 @@ void app_main(void)
     run_wifi_util_tests();
     run_store_tests();
     run_tls_check_tests();
+    run_tls_csr_tests();
     exit(UNITY_END());   // exit code = number of failures, so scripts can check it
 }

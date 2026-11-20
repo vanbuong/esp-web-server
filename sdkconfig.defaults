@@ -18,3 +18,7 @@ CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
 # Socket budget: the HTTP server needs max_open_sockets (7) + 3 internal sockets, the captive DNS
 # server one more, and phones open several connections at once. The default of 10 is too few.
 CONFIG_LWIP_MAX_SOCKETS=16
+
+# The device makes its own key and certificate request (CSR path, spec 7.3).
+CONFIG_MBEDTLS_X509_CREATE_C=y
+CONFIG_MBEDTLS_X509_CSR_WRITE_C=y
