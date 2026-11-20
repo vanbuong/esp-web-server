@@ -92,6 +92,20 @@ static void describe_key(const mbedtls_pk_context *key, char *out, size_t len)
 // PEM parsers want the length including the terminating NUL.
 #define PEM_ARGS(s) (const unsigned char *)(s), strlen(s) + 1
 
+bool gw_pem_same_cert(const char *a, const char *b)
+{
+    mbedtls_x509_crt ca, cb;
+    mbedtls_x509_crt_init(&ca);
+    mbedtls_x509_crt_init(&cb);
+    bool same = psa_crypto_init() == PSA_SUCCESS &&
+                mbedtls_x509_crt_parse(&ca, PEM_ARGS(a)) == 0 &&
+                mbedtls_x509_crt_parse(&cb, PEM_ARGS(b)) == 0 &&
+                ca.raw.len == cb.raw.len && memcmp(ca.raw.p, cb.raw.p, ca.raw.len) == 0;
+    mbedtls_x509_crt_free(&ca);
+    mbedtls_x509_crt_free(&cb);
+    return same;
+}
+
 const char *gw_tls_check(const char *key_pem, const char *cert_pem, const char *ca_pem,
                          const char *hostname, gw_tls_info_t *info)
 {

@@ -114,6 +114,20 @@ static esp_err_t h_tls_cert(httpd_req_t *req)
     char *key = (char *)gw_json_str(body, "key");    // cJSON strings are heap copies: may be edited
     char *cert = (char *)gw_json_str(body, "cert");
     char *ca = (char *)gw_json_str(body, "ca");
+#if CONFIG_GW_TLS_MODE_MUTUAL
+    // In mutual mode the CA also decides which browsers get in. A new CA would lock out every
+    // existing client certificate after the reboot, so it has to be confirmed explicitly.
+    gw_tls_rec_t cur;
+    if (ca && !cJSON_IsTrue(cJSON_GetObjectItem(body, "confirm_ca_change")) &&
+            gw_store_get_tls(&cur) == ESP_OK) {
+        bool same = gw_pem_same_cert(cur.ca, ca);
+        gw_store_tls_free(&cur);
+        if (!same) {
+            cJSON_Delete(body);
+            return gw_http_send_error(req, GW_HTTP_409, "ca_changed");
+        }
+    }
+#endif
     gw_tls_info_t info;
     const char *err = gw_http_tls_accept(key, cert ? cert : (char[]){""}, ca ? ca : (char[]){""},
                                          g_http.hostname, &info);

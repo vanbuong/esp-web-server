@@ -105,8 +105,31 @@ static void test_not_signed_by_ca(void)
     TEST_ASSERT_EQUAL_STRING("not_signed_by_ca", gw_tls_check(fx_dev_key, fx_dev_by_ca2_crt, fx_ca_crt, HOST, &info));
 }
 
+FIX(ca2_crt);
+
+static void test_same_cert(void)
+{
+    TEST_ASSERT_TRUE(gw_pem_same_cert(fx_ca_crt, fx_ca_crt));
+    TEST_ASSERT_FALSE(gw_pem_same_cert(fx_ca_crt, fx_ca2_crt));
+    TEST_ASSERT_FALSE(gw_pem_same_cert(fx_ca_crt, "garbage"));
+    TEST_ASSERT_FALSE(gw_pem_same_cert("", fx_ca_crt));
+    // Same certificate with CRLF line endings is still the same certificate.
+    size_t n = strlen(fx_ca_crt);
+    char *crlf = malloc(2 * n + 1), *p = crlf;
+    for (size_t i = 0; i < n; i++) {
+        if (fx_ca_crt[i] == '\n') {
+            *p++ = '\r';
+        }
+        *p++ = fx_ca_crt[i];
+    }
+    *p = 0;
+    TEST_ASSERT_TRUE(gw_pem_same_cert(fx_ca_crt, crlf));
+    free(crlf);
+}
+
 void run_tls_check_tests(void)
 {
+    RUN_TEST(test_same_cert);
     RUN_TEST(test_ok_ec);
     RUN_TEST(test_ok_rsa);
     RUN_TEST(test_ok_pkcs8_key);

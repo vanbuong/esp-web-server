@@ -10,6 +10,7 @@
 #include "gw_mdns.h"
 #include "gw_http_setup.h"
 #include "gw_http_admin.h"
+#include "gw_tls_check.h"
 #include "gw_time.h"
 #include "esp_system.h"
 #include "gw_wifi_util.h"
@@ -95,6 +96,12 @@ static void normal_mode(void)
     memset(wifi_pass, 0, sizeof(wifi_pass));
     ESP_ERROR_CHECK(gw_time_start(CONFIG_GW_SNTP_SERVER));
     ESP_ERROR_CHECK(gw_mdns_start(s_host, s_instance, true));
+    // Re-check the stored identity: catches NVS damage before browsers see a broken handshake.
+    static gw_tls_info_t cert_info;
+    const char *bad = gw_tls_check(tls.key, tls.cert, tls.ca, s_host, &cert_info);
+    if (bad) {
+        back_to_setup(GW_STEP_TLS, bad);
+    }
     const gw_http_admin_cfg_t admin = {
         .device_id = s_id,
         .hostname = s_host,
@@ -103,10 +110,11 @@ static void normal_mode(void)
         .key_pem = tls.key,
         .cert_pem = tls.cert,
         .ca_pem = tls.ca,
+        .cert_info = &cert_info,
     };
-    if (gw_http_admin_start(&admin) == ESP_ERR_INVALID_STATE) {
-        back_to_setup(GW_STEP_TLS, "stored TLS identity no longer valid");
-    }
+    // A failure here (e.g. out of memory) reboots via abort: better than a device that answers
+    // mDNS and redirects to an HTTPS port nobody is listening on.
+    ESP_ERROR_CHECK(gw_http_admin_start(&admin));
     ESP_ERROR_CHECK(gw_http_redirect_start(s_host));
 }
 

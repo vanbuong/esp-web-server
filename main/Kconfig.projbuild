@@ -110,6 +110,9 @@ menu "Gateway"
                 login page and only the password protects it.
             config GW_TLS_MODE_MUTUAL
                 bool "Mutual TLS (client certificate required)"
+                # Keep the browser's certificate after the handshake so its CN can be logged and
+                # shown in /api/status (~4 KB heap per session; mbedTLS drops it by default).
+                select MBEDTLS_SSL_KEEP_PEER_CERTIFICATE
             config GW_TLS_MODE_SERVER_AUTH
                 bool "Server authentication only"
         endchoice

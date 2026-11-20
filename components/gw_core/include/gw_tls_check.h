@@ -1,6 +1,7 @@
 #pragma once
 // Checks a server identity (private key + certificate + CA) before the gateway stores it.
 // Run on the device when you upload certificates, and unit-tested on the PC.
+#include <stdbool.h>
 #include <stddef.h>
 
 #define GW_TLS_PEM_MAX 4096   // per field (key, cert chain, CA)
@@ -26,6 +27,12 @@ typedef struct {
  */
 const char *gw_tls_check(const char *key_pem, const char *cert_pem, const char *ca_pem,
                          const char *hostname, gw_tls_info_t *info);
+
+/**
+ * True if both PEM strings hold the same (first) certificate — compared as DER, so line endings
+ * and whitespace don't matter. False if either doesn't parse.
+ */
+bool gw_pem_same_cert(const char *a, const char *b);
 
 /** In place: CRLF → LF and surrounding whitespace removed (pasted PEM is often messy). */
 void gw_pem_normalize(char *pem);

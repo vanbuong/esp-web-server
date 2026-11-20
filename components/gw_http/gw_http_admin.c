@@ -120,12 +120,7 @@ const gw_tls_info_t *gw_http_admin_cert(void)
 
 esp_err_t gw_http_admin_start(const gw_http_admin_cfg_t *cfg)
 {
-    // Re-check the stored identity: catches NVS damage before browsers see a broken handshake.
-    const char *bad = gw_tls_check(cfg->key_pem, cfg->cert_pem, cfg->ca_pem, cfg->hostname, &s_cert);
-    if (bad) {
-        ESP_LOGE(TAG, "stored TLS identity invalid: %s", bad);
-        return ESP_ERR_INVALID_STATE;
-    }
+    s_cert = *cfg->cert_info;
     ESP_RETURN_ON_ERROR(gw_http_common_init(true, cfg->device_id, cfg->hostname, cfg->fw_version,
                                             cfg->defaults), TAG, "init");
     g_http.status_extra = status_extra;
@@ -178,7 +173,7 @@ esp_err_t gw_http_redirect_start(const char *hostname)
     httpd_config_t hc = HTTPD_DEFAULT_CONFIG();   // port 80, ctrl port 32768
     hc.max_open_sockets = 2;
     hc.lru_purge_enable = true;
-    hc.stack_size = 3072;
+    hc.stack_size = 4096;   // IDF default; request parsing + snprintf + headers
     httpd_handle_t srv;
     ESP_RETURN_ON_ERROR(httpd_start(&srv, &hc), TAG, "http start");
     return httpd_register_err_handler(srv, HTTPD_404_NOT_FOUND, redirect_404);

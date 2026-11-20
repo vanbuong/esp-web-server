@@ -14,7 +14,7 @@ idf_component_register(SRCS "test_main.c"
                        EMBED_TXTFILES "${fx}/ca.crt" "${fx}/dev.key" "${fx}/dev.crt" "${fx}/dev_pkcs8.key"
                                       "${fx}/dev_rsa.key" "${fx}/dev_rsa.crt" "${fx}/dev_other_name.crt"
                                       "${fx}/dev_client_eku.crt" "${fx}/dev_by_ca2.crt" "${fx}/int.crt"
-                                      "${fx}/dev_via_int.key" "${fx}/dev_via_int.crt" "${fx}/client.key")
+                                      "${fx}/dev_via_int.key" "${fx}/dev_via_int.crt" "${fx}/client.key" "${fx}/ca2.crt")
 
 # linux target only: libtfpsacrypto.a needs esp_mbedtls_mem_calloc/free from the IDF mbedtls
 # component lib, which the linker has already passed by then (link order). -u makes the linker

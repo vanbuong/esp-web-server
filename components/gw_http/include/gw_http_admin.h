@@ -3,17 +3,18 @@
 // whose only job is to redirect browsers to HTTPS.
 #include "esp_err.h"
 #include "gw_auth.h"
+#include "gw_tls_check.h"
 
 typedef struct {
     const char *device_id, *hostname, *fw_version;
     const gw_creds_t *defaults;
-    const char *key_pem, *cert_pem, *ca_pem;   // stored identity; must outlive the server
+    const char *key_pem, *cert_pem, *ca_pem;   // stored identity, already checked with gw_tls_check
+    const gw_tls_info_t *cert_info;            // that check's result (shown in /api/status)
 } gw_http_admin_cfg_t;
 
 /**
  * Starts HTTPS. With CONFIG_GW_TLS_MODE_MUTUAL the CA is also used to require a client
  * certificate: browsers without one signed by your CA fail the handshake and see nothing.
- * Returns ESP_ERR_INVALID_STATE if the stored identity no longer validates.
  */
 esp_err_t gw_http_admin_start(const gw_http_admin_cfg_t *cfg);
 
