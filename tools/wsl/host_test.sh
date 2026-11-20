@@ -3,6 +3,8 @@
 # Why WSL: the linux target needs a POSIX host; it does not build on native Windows.
 set -uo pipefail
 source "$(dirname "$0")/env.sh"
+# Throwaway certificates for the TLS tests; generated here so no private key is ever committed.
+bash "$REPO/tools/pki/make_test_fixtures.sh" "$REPO/test/host/fixtures" >/dev/null || exit 1
 cd "$REPO/test/host"
 log="build-linux.log"
 if ! idf.py -B build-linux -D IDF_TARGET=linux build >"$log" 2>&1; then
